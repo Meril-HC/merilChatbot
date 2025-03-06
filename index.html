@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Design and Development</title>
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #f9f9f9;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 500px;
+      width: 90%;
+      margin-bottom: 20px;
+    }
+    .container h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    input, select {
+      padding: 10px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      padding: 12px;
+      background: #007bff;
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .output-box {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 500px;
+      width: 90%;
+      margin-top: 20px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Design and Development</h1>
+    <form id="responseForm">
+      <label for="product">Enter Product Name</label>
+      <input type="text" id="product" placeholder="Enter Product Name" required />
+      
+      <label for="requirement">Requirement</label>
+      <select id="requirement" required>
+        <option value="">Select Requirement</option>
+        <option value="Functional Requirement">Functional Requirement</option>
+        <option value="Other Requirement">Other Requirement</option>
+      </select>
+      
+      <button type="submit">Generate Response</button>
+    </form>
+  </div>
+  
+  <!-- Output Box for displaying the response -->
+  <div id="output" class="output-box"></div>
+  
+  <script>
+    /**
+     * Parse ChatGPT response text into sections with headings and bullet points.
+     * Expected format:
+     *   **Heading:**
+     *   - Bullet point 1
+     *   - Bullet point 2
+     *   **Next Heading:**
+     *   - Bullet point ...
+     *
+     * This function removes double asterisks, trims extra spaces, and creates
+     * an HTML string with bold headings and bullet points.
+     */
+    function parseSectionsAndBullets(rawText) {
+      // Remove any '**' used for bold formatting.
+      let text = rawText.replace(/\*\*/g, '');
+      // Split into lines and trim.
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+      let htmlOutput = '';
+      let currentHeading = '';
+      let bullets = [];
+      // Helper to flush the current section.
+      function flushSection() {
+        if (!currentHeading && bullets.length === 0) return;
+        htmlOutput += `<strong style="display:block; margin-top:1em;">${currentHeading}</strong>\n`;
+        htmlOutput += '<ul style="margin-top: 0.5em; margin-bottom: 1em; padding-left: 20px;">';
+        bullets.forEach(bullet => {
+          htmlOutput += `<li style="margin-bottom: 6px;">${bullet}</li>`;
+        });
+        htmlOutput += '</ul>';
+        currentHeading = '';
+        bullets = [];
+      }
+      lines.forEach(line => {
+        const headingMatch = line.match(/^(.*?):$/);
+        if (headingMatch) {
+          flushSection();
+          currentHeading = headingMatch[1].trim();
+        } else if (line.startsWith('-')) {
+          const bulletText = line.replace(/^-+/, '').trim();
+          bullets.push(bulletText);
+        } else {
+          bullets.push(line);
+        }
+      });
+      flushSection();
+      return htmlOutput || 'No structured sections found.';
+    }
+
+    // Function to simulate a typing animation.
+    function typeText(element, text, speed) {
+      let i = 0;
+      element.innerHTML = "";
+      const interval = setInterval(() => {
+        if (i < text.length) {
+          element.innerHTML = text.substring(0, i + 1);
+          i++;
+        } else {
+          clearInterval(interval);
+        }
+      }, speed);
+    }
+    
+    // Async function to generate the response using ChatGPT (OpenAI API with GPT-4).
+    async function generateResponse(event) {
+      event.preventDefault();
+      
+      const product = document.getElementById("product").value.trim();
+      const requirement = document.getElementById("requirement").value;
+      const output = document.getElementById("output");
+      
+      if (!product || !requirement) {
+        output.innerHTML = "<p>Please fill in all required fields.</p>";
+        return;
+      }
+      
+      // Construct query text based on the requirement.
+      let queryText = "";
+      if (requirement === "Functional Requirement") {
+        queryText = `Generate a concise list of key functional requirements for ${product}, with each section having a bold heading and bullet points.`;
+      } else {
+        queryText = `Generate a concise list of key other requirements for ${product}, with each section having a bold heading and bullet points.`;
+      }
+      
+      // Display a generating message.
+      typeText(output, `Generating response for "${product}" (${requirement})...\n\n`, 20);
+      
+      // ChatGPT API endpoint and API key.
+      const apiKey = process.env.OPENAI_API_KEY;
+      const url = "https://api.openai.com/v1/chat/completions";
+      
+      // Prepare the payload with GPT-4 model.
+      const payload = {
+        model: "gpt-4",
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: queryText }
+        ],
+        max_tokens: 250,
+        temperature: 0.7
+      };
+      
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        let generatedText = "";
+        if (data.choices && data.choices.length > 0) {
+          generatedText = data.choices[0].message.content;
+        } else {
+          generatedText = "No text found in the ChatGPT response.";
+        }
+        
+        // Parse the text into sections with bullet points.
+        const formattedHTML = parseSectionsAndBullets(generatedText);
+        // Display the formatted HTML with a typing effect.
+        typeText(output, formattedHTML, 10);
+      } catch (error) {
+        output.innerHTML = `<p>Error fetching data: ${error.message}</p>`;
+      }
+    }
+    
+    document.getElementById("responseForm").addEventListener("submit", generateResponse);
+  </script>
+  <script>
+  // Disable right-click menu
+  document.addEventListener('contextmenu', event => event.preventDefault());
+
+  // Disable certain keyboard shortcuts
+  document.addEventListener('keydown', function(event) {
+    if (
+      event.ctrlKey && (event.key === 'u' || event.key === 'U' ||  
+      event.key === 's' || event.key === 'S' ||  
+      event.key === 'p' || event.key === 'P' ||  
+      event.key === 'j' || event.key === 'J' ||  
+      event.key === 'i' || event.key === 'I') || 
+      event.key === 'F12'
+    ) {
+      event.preventDefault();
+    }
+  });
+
+  // Prevent opening DevTools via Console
+  (function() {
+    let devtoolsOpen = false;
+    let element = new Image();
+    Object.defineProperty(element, 'id', {
+      get: function() {
+        devtoolsOpen = true;
+        throw new Error("DevTools is disabled.");
+      }
+    });
+    setInterval(() => {
+      devtoolsOpen = false;
+      console.log('%c', element);
+      if (devtoolsOpen) {
+        document.body.innerHTML = "<h2 style='color:red; text-align:center;'>DevTools is disabled.</h2>";
+      }
+    }, 1000);
+  })();
+  </script>
+</body>
+</html>
